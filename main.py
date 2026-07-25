@@ -8,10 +8,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # ==========================================
 # ⚙️ CONFIGURATION (यहाँ अपनी डिटेल्स डालें)
 # ==========================================
-API_ID = 1234567  # अपना API ID यहाँ डालें (my.telegram.org से)
-API_HASH = "your_api_hash_here" # अपना API HASH यहाँ डालें
+API_ID = 31660355  # अपना API ID यहाँ डालें (my.telegram.org से)
+API_HASH = "78292fcf0b3c508b3257e9dda9728df4" # अपना API HASH यहाँ डालें
 BOT_TOKEN = "8972078260:AAENtp-9JaIo5ykLuEs9B1er8l6T7WvuEQo" # @BotFather से मिला टोकन
-MONGO_DB_URI = "mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority" # अपनी MongoDB URL डालें
+MONGO_DB_URI = "mongodb+srv://Tejas7xx:mrxtejas7@cluster0.akhlgjf.mongodb.net/?appName=Cluster0" # अपनी MongoDB URL डालें
 ADMIN_ID = 8884734704  # अपना खुद का टेलीग्राम User ID डालें (ताकि सिर्फ आप ब्रॉडकास्ट कर सकें)
 
 # ==========================================
