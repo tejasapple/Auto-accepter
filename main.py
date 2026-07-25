@@ -450,7 +450,7 @@ async def process_broadcast_steps(update: Update, context: ContextTypes.DEFAULT_
     step = state["step"]
     message = update.message
     
-    # 🚨 FIX: Strict skip check to handle empty captions and actual /skip command
+    # Strict skip check to handle empty captions and actual /skip command
     raw_text = message.text or message.caption or ""
     is_skip_cmd = raw_text.strip().lower() == "/skip"
     
@@ -496,7 +496,7 @@ async def process_broadcast_steps(update: Update, context: ContextTypes.DEFAULT_
             if not state["media_id"]:
                 await message.reply_text("⚠️ You cannot skip both Media and Text! Please send some text.")
                 return
-            state["text"] = None  # Explicitly set to None for execution logic
+            state["text"] = None  
             state["step"] = "btn_count"
             await message.reply_text("⏭ <b>Text Skipped.</b>\n\n<b>Step 3:</b> How many Inline Buttons do you want? (Send a number like 0, 1, 2, etc.)", parse_mode=ParseMode.HTML)
         else:
@@ -533,7 +533,7 @@ async def process_broadcast_steps(update: Update, context: ContextTypes.DEFAULT_
         state["temp_url"] = raw_text
         state["step"] = "btn_color"
         
-        # Color Selection Keyboard (Uses native colors mapping)
+        # Color Selection Keyboard
         kb = InlineKeyboardMarkup([
             [get_color_btn("🟢 Success (Green)", callback_data="setcol_success", style="success"), 
              get_color_btn("🔴 Danger (Red)", callback_data="setcol_danger", style="danger")],
@@ -559,18 +559,9 @@ async def confirm_bcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def execute_broadcast(context: ContextTypes.DEFAULT_TYPE, admin_id: int, state: dict):
     """
-    Executes the broadcast loop.
-    🚨 FIX: Removed Database deletion logic completely. No data will be deleted ever.
+    Executes the broadcast loop seamlessly with Async Cursors for High Scalability.
     """
     btype = state["type"]
-    
-    if btype == "users":
-        targets = await users_col.find({}).to_list(length=None)
-        id_key = "user_id"
-    else:
-        targets = await chats_col.find({}).to_list(length=None)
-        id_key = "chat_id"
-        
     success, failed = 0, 0
     
     # Setup Inline Keyboard
@@ -583,13 +574,20 @@ async def execute_broadcast(context: ContextTypes.DEFAULT_TYPE, admin_id: int, s
     # Resolve Text for Media Captions
     msg_text = state["text"] if state["text"] else ""
     
-    for target in targets:
+    # Choose Collection
+    collection = users_col if btype == "users" else chats_col
+    id_key = "user_id" if btype == "users" else "chat_id"
+        
+    # SCALABILITY FIX: Using async cursor prevents loading 2 Lakh users in RAM at once.
+    cursor = collection.find({})
+    
+    async for target in cursor:
         tid = target.get(id_key)
         if not tid:
             continue
             
         try:
-            # 🚨 FIX: Robustly handle all 6 media types and skipped text
+            # Handle all media types robustly
             if state["media_type"] == "photo":
                 await context.bot.send_photo(chat_id=tid, photo=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
             elif state["media_type"] == "video":
@@ -607,7 +605,7 @@ async def execute_broadcast(context: ContextTypes.DEFAULT_TYPE, admin_id: int, s
                 await context.bot.send_message(chat_id=tid, text=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
             
             success += 1
-            await asyncio.sleep(0.05) # Safe rate limiting delay (20 msgs per sec)
+            await asyncio.sleep(0.05) # Safe rate limiting delay (20 msgs per sec avoids FloodWait Limits)
             
         except telegram.error.RetryAfter as e:
             logger.warning(f"Broadcast FloodWait for {e.retry_after} seconds.")
@@ -618,6 +616,14 @@ async def execute_broadcast(context: ContextTypes.DEFAULT_TYPE, admin_id: int, s
                     await context.bot.send_photo(chat_id=tid, photo=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
                 elif state["media_type"] == "video":
                     await context.bot.send_video(chat_id=tid, video=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                elif state["media_type"] == "document":
+                    await context.bot.send_document(chat_id=tid, document=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                elif state["media_type"] == "audio":
+                    await context.bot.send_audio(chat_id=tid, audio=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                elif state["media_type"] == "animation":
+                    await context.bot.send_animation(chat_id=tid, animation=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                elif state["media_type"] == "voice":
+                    await context.bot.send_voice(chat_id=tid, voice=state["media_id"], caption=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
                 else:
                     await context.bot.send_message(chat_id=tid, text=msg_text, reply_markup=kb, parse_mode=ParseMode.HTML)
                 success += 1
@@ -627,8 +633,7 @@ async def execute_broadcast(context: ContextTypes.DEFAULT_TYPE, admin_id: int, s
         except Exception as e:
             logger.info(f"Broadcast to {tid} failed. Reason: {e}")
             failed += 1
-            # 🚨 FIX: OLD CODE HAD DB DELETION HERE. IT IS NOW REMOVED COMPLETELY.
-            # We keep the user data forever as requested.
+            # User Data will NOT be deleted here to ensure total persistence
                 
     # Final Notification
     await context.bot.send_message(
@@ -671,6 +676,9 @@ def main():
     app.add_handler(CommandHandler("cancel", cancel_bcast, filters=filters.ChatType.PRIVATE))
     app.add_handler(CommandHandler("confirm", confirm_bcast, filters=filters.ChatType.PRIVATE))
     app.add_handler(CommandHandler("export_users", export_users_csv, filters=filters.ChatType.PRIVATE))
+    
+    # NEW FIX: Explicitly handled /skip command for Broadcast Wizard
+    app.add_handler(CommandHandler("skip", process_broadcast_steps, filters=filters.ChatType.PRIVATE))
     
     # Core Handlers
     app.add_handler(CallbackQueryHandler(callback_router))
