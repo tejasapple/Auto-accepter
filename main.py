@@ -500,7 +500,7 @@ async def process_broadcast_steps(update: Update, context: ContextTypes.DEFAULT_
             state["step"] = "btn_count"
             await message.reply_text("⏭ <b>Text Skipped.</b>\n\n<b>Step 3:</b> How many Inline Buttons do you want? (Send a number like 0, 1, 2, etc.)", parse_mode=ParseMode.HTML)
         else:
-            state["text"] = message.text.html if message.text else (message.caption_html if message.caption else raw_text)
+            state["text"] = message.text_html if message.text else (message.caption_html if message.caption else raw_text)
             state["step"] = "btn_count"
             await message.reply_text("✅ <b>Text Saved.</b>\n\n<b>Step 3:</b> How many Inline Buttons do you want? (Send a number like 0, 1, 2, etc.)", parse_mode=ParseMode.HTML)
             
