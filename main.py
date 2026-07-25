@@ -94,7 +94,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.reply_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🛡️ AUTO ACCEPT & VERIFICATION DM
+# 🛡️ AUTO ACCEPT & VERIFICATION DM (100% Network Fix + 2 Retries)
 # ==========================================
 async def auto_accept_requests(update: Update, context: ContextTypes.DEFAULT_TYPE):
     request = update.chat_join_request
@@ -112,13 +112,44 @@ async def auto_accept_requests(update: Update, context: ContextTypes.DEFAULT_TYP
         [get_color_btn("I am not a robot (Verify)", callback_data=f"verify_{chat.id}", style="success")]
     ])
     
-    try:
-        await context.bot.send_message(chat_id=user.id, text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
-    except telegram.error.RetryAfter as e:
-        await asyncio.sleep(e.retry_after)
-        await context.bot.send_message(chat_id=user.id, text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
-    except Exception as e:
-        print(f"Could not send DM to {user.first_name} ({user.id}): {e}")
+    # 2 बार एक्स्ट्रा ट्राई करने का लॉजिक (Total 3 attempts)
+    max_retries = 2
+    
+    for attempt in range(max_retries + 1):
+        try:
+            # मैसेज भेजने की कोशिश
+            await context.bot.send_message(chat_id=user.id, text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+            break  # अगर सक्सेसफुल हो गया, तो लूप से बाहर आ जाओ
+            
+        except telegram.error.RetryAfter as e:
+            # Telegram ने फ्लड की वजह से रोका है, जितना टाइम बोला है उतना वेट करेंगे
+            await asyncio.sleep(e.retry_after)
+            if attempt == max_retries:
+                print(f"Could not send DM to {user.id} due to flood limit exhaustion.")
+                
+        except (telegram.error.TimedOut, telegram.error.NetworkError) as e:
+            # नेटवर्क इशू आया, तो 2 सेकंड रुक कर वापस ट्राई करेगा (अगर लिमिट बची है)
+            if attempt < max_retries:
+                await asyncio.sleep(2)
+            else:
+                print(f"Network error while sending DM to {user.first_name} ({user.id}) after {max_retries} retries: {e}")
+                
+        except telegram.error.Forbidden:
+            # यूज़र ने बॉट को ब्लॉक किया हुआ है (यहाँ रिट्राई करने का कोई फायदा नहीं)
+            print(f"Cannot send DM: User {user.first_name} ({user.id}) has blocked the bot or has strict privacy.")
+            break 
+            
+        except telegram.error.BadRequest as e:
+            # चैट आईडी गलत है या डिलीट हो चुकी है
+            print(f"Bad Request for {user.first_name} ({user.id}): {e}")
+            break
+            
+        except Exception as e:
+            # कोई और अननोन एरर, फिर भी एक बार रिट्राई करेंगे
+            if attempt < max_retries:
+                await asyncio.sleep(2)
+            else:
+                print(f"Failed to send DM to {user.first_name} ({user.id}) after {max_retries} retries: {e}")
 
 # ==========================================
 # ⚙️ ADVANCED ADMIN PANEL DASHBOARD
