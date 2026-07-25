@@ -1,3 +1,4 @@
-pyrogram
-tgcrypto
+python-telegram-bot[job-queue]
 motor
+pymongo
+apscheduler
